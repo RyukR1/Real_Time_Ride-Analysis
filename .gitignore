@@ -1,0 +1,81 @@
+# .gitignore for Real-Time Ride Analytics
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Spark
+metastore_db/
+warehouse/
+*.log
+spark-warehouse/
+
+# Parquet files (local testing)
+/tmp/
+*.parquet
+
+# Environment
+.env
+.env.local
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+*.tfvars
+
+# Data
+data/
+*.csv
+*.parquet
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
