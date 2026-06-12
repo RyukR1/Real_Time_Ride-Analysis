@@ -7,19 +7,24 @@ Spark Structured Streaming: Process ride events with:
 """
 
 import json
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
+
+# Add app directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pyspark.sql import SparkSession, DataFrame, Window
 from pyspark.sql.functions import (
-    from_json, col, window, count, countDistinct, 
+    from_json, col, window, count, approx_count_distinct, 
     when, explode, struct, to_timestamp, current_timestamp,
     first, last, broadcast
 )
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, LongType
 
 from config.settings import settings
-from config.schemas import RIDE_EVENT_AVRO_SCHEMA, SURGE_METRICS_SCHEMA
+
 
 
 def create_spark_session() -> SparkSession:
@@ -55,10 +60,9 @@ def define_schema() -> StructType:
     ])
 
 
-def geofence_zone(lat: float, lon: float) -> str:
+def geofence_zone(lat_col, lon_col):
     """
-    Simple geofencing: Map coordinates to zones.
-    In production, use PostGIS for accurate polygon queries.
+    Simple geofencing: Map coordinates to zones using native Spark SQL functions.
     """
     zones = {
         "manhattan": ((40.7000, 40.8300), (-74.0300, -73.9200)),
@@ -68,11 +72,60 @@ def geofence_zone(lat: float, lon: float) -> str:
         "staten_island": ((40.5000, 40.6500), (-74.3000, -74.0500)),
     }
     
+    expr = None
     for zone_name, ((lat_min, lat_max), (lon_min, lon_max)) in zones.items():
-        if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
-            return zone_name
+        cond = (lat_col >= lat_min) & (lat_col <= lat_max) & (lon_col >= lon_min) & (lon_col <= lon_max)
+        if expr is None:
+            expr = when(cond, zone_name)
+        else:
+            expr = expr.when(cond, zone_name)
+            
+    return expr.otherwise("unknown")
+
+
+def write_to_redis(batch_df, batch_id):
+    """
+    Collects the streaming microbatch results to the driver
+    and writes them directly to Redis.
+    """
+    rows = batch_df.collect()
+    if not rows:
+        return
+        
+    import redis
+    import json
+    from datetime import datetime, timezone
     
-    return "unknown"
+    try:
+        client = redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            decode_responses=True,
+            socket_connect_timeout=5
+        )
+        for row in rows:
+            zone_id = row["zone_id"]
+            metrics = {
+                "ride_request_count": int(row["ride_request_count"]),
+                "active_drivers": int(row["active_drivers"]),
+                "surge_flag": bool(row["surge_flag"]),
+                "suggested_multiplier": float(row["suggested_multiplier"]),
+                "window_start": str(row["window_start"]),
+                "window_end": str(row["window_end"]),
+                "processed_at": str(row["processed_at"])
+            }
+            key = f"surge:{zone_id}:current"
+            client.setex(
+                key,
+                300,  # 5 minutes TTL
+                json.dumps({
+                    **metrics,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+            )
+        print(f"✓ Spark successfully wrote batch {batch_id} with {len(rows)} rows to Redis")
+    except Exception as e:
+        print(f"❌ Spark error writing batch {batch_id} to Redis: {e}")
 
 
 def process_ride_stream(spark: SparkSession) -> None:
@@ -131,7 +184,7 @@ def process_ride_stream(spark: SparkSession) -> None:
         )
         .agg(
             count(when(col("event_type") == "RIDE_REQUESTED", 1)).alias("ride_request_count"),
-            countDistinct("driver_id").alias("active_drivers"),
+            approx_count_distinct("driver_id").alias("active_drivers"),
             first("surge_multiplier", ignorenulls=True).alias("avg_surge_multiplier")
         )
         .withColumn("window_start", col("window.start"))
@@ -171,6 +224,7 @@ def process_ride_stream(spark: SparkSession) -> None:
         df_surge
         .writeStream
         .format("console")
+        .outputMode("update")
         .option("truncate", "false")
         .option("numRows", 20)
         .start()
@@ -195,6 +249,16 @@ def process_ride_stream(spark: SparkSession) -> None:
         .option("path", "/tmp/ride_analytics_metrics_csv")
         .option("header", "true")
         .option("checkpointLocation", "/tmp/ride_analytics_checkpoint_csv")
+        .start()
+    )
+    
+    # Sink 4: Redis for Streamlit
+    query_redis = (
+        df_surge
+        .writeStream
+        .outputMode("update")
+        .foreachBatch(write_to_redis)
+        .option("checkpointLocation", "/tmp/ride_analytics_checkpoint_redis")
         .start()
     )
     

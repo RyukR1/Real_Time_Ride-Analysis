@@ -4,7 +4,7 @@ Ensures data integrity across the pipeline.
 """
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class RideEventValidator:
@@ -93,7 +93,7 @@ class RideEventValidator:
             self.violations.append({
                 "event_id": event.get("event_id"),
                 "errors": errors,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
         
         return len(errors) == 0, errors if errors else None
@@ -208,7 +208,7 @@ aggregation_validator = AggregationValidator()
 def get_validation_report() -> Dict[str, Any]:
     """Generate validation report."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "event_validation": {
             "total_checked": event_validator.checked_count,
             "violations": len(event_validator.violations),

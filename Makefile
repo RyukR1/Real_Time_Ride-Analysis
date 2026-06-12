@@ -1,4 +1,4 @@
-.PHONY: help install validate start stop logs clean
+.PHONY: help install validate start stop logs clean producer processor streamlit spark-clean local-processor
 
 help:
 	@echo "🚗 Real-Time Ride Analytics - Makefile Commands"
@@ -16,6 +16,7 @@ help:
 	@echo "Development:"
 	@echo "  make producer     - Run Kafka producer locally"
 	@echo "  make processor    - Run Spark processor locally"
+	@echo "  make local-processor - Run Spark processor locally with host overrides and clean checkpoints"
 	@echo "  make streamlit    - Run Streamlit dashboard"
 	@echo ""
 	@echo "Cloud:"
@@ -57,9 +58,15 @@ producer:
 	python producer/kafka_producer.py
 
 processor:
-	spark-submit \
-		--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+	JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 spark-submit \
+		--packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1 \
 		processor/spark_stream_processor.py
+
+spark-clean:
+	rm -rf /tmp/ride_analytics_*
+
+local-processor: spark-clean
+	KAFKA_BOOTSTRAP_SERVERS=localhost:29092 REDIS_HOST=localhost DB_HOST=localhost $(MAKE) processor
 
 streamlit:
 	streamlit run serving/streamlit_app.py

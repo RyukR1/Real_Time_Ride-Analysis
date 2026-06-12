@@ -8,7 +8,7 @@ import redis
 import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add app directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -59,7 +59,7 @@ class RedisMetricsStore:
                 ttl_seconds,
                 json.dumps({
                     **metrics,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 })
             )
             return True
@@ -133,7 +133,7 @@ class RedisMetricsStore:
                 json.dumps({
                     "latitude": latitude,
                     "longitude": longitude,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
             )
             return True

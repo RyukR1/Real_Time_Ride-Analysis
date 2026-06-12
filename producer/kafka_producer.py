@@ -11,7 +11,7 @@ import json
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from random import random, randint, choice, gauss
 from typing import Dict, Any
@@ -71,7 +71,7 @@ def generate_ride_event(driver_id: str, event_num: int) -> Dict[str, Any]:
         "ride_id": f"ride_{driver_id}_{event_num}",
         "latitude": current_location[0],
         "longitude": current_location[1],
-        "timestamp": int(datetime.utcnow().timestamp() * 1000),
+        "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
     }
     
     # Add location details for different event types
@@ -85,7 +85,7 @@ def generate_ride_event(driver_id: str, event_num: int) -> Dict[str, Any]:
         event["trip_distance_km"] = calculate_trip_distance(pickup_loc, dropoff_loc)
         
         # Simulate surge pricing (higher during peak hours)
-        hour = datetime.utcnow().hour
+        hour = datetime.now(timezone.utc).hour
         if 7 <= hour <= 9 or 17 <= hour <= 19:  # Rush hours
             event["surge_multiplier"] = round(1.0 + random() * 0.5, 2)
         else:

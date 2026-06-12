@@ -43,23 +43,24 @@ Streamlit Dashboard (live visualization)
 ### Prerequisites
 
 - Docker & Docker Compose
-- Python 3.11+
+- Python 3.11+ (with Java 17 installed on the host for Spark)
 - AWS CLI (for Terraform deployment)
 
-### Local Development (Docker Compose)
+### Local Development Flow (Recommended)
 
-```bash/home/ryukr2/Real_Time_Ride-Analysis
-# Clone the repository
-cd Real_Time_Ride-Analysis
+The easiest and most efficient way to run the entire pipeline locally is using the provided `Makefile` targets:
 
-# Start all services
-docker compose up -d
+```bash
+# 1. Install Python requirements on the host
+make install
 
-# View logs
-docker compose logs -f
+# 2. Start the Docker Compose infrastructure (Kafka, Postgres, Redis, Streamlit, etc.)
+make start
 
-# Access dashboard
-# Open http://localhost:8501 in your browser
+# 3. Start the Spark Stream Processor on the host (cleans checkpoints and sets host network overrides)
+make local-processor
+
+# 4. Access the dashboard at http://localhost:8501
 ```
 
 ### Manual Setup (Without Docker)
@@ -72,17 +73,16 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Start Kafka locally
-# (Use Confluent Community or Docker)
+# Start Kafka locally (or via Docker)
 
 # Start services in separate terminals:
 
 # Terminal 1: Kafka Producer
 python producer/kafka_producer.py
 
-# Terminal 2: Spark Streaming (requires Spark installation)
-spark-submit \
-    --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+# Terminal 2: Spark Streaming (requires Spark 4.1.1 & Java 17)
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 spark-submit \
+    --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1 \
     processor/spark_stream_processor.py
 
 # Terminal 3: Streamlit Dashboard
@@ -230,6 +230,21 @@ This project demonstrates:
 - **Cache Optimization**: Redis for sub-ms lookups
 
 ## 🚨 Common Issues
+
+### Kafka exits immediately during startup (ZooKeeper Session Lock)
+- **Error**: `KeeperException$NodeExistsException: KeeperErrorCode = NodeExists`
+- **Solution**: This happens on quick restarts when ZooKeeper has not expired the old broker session. Stop the stack completely and restart it:
+  ```bash
+  make stop
+  make start
+  ```
+
+### Spark checkpoint file errors
+- **Error**: `FileNotFoundException: File file:/tmp/ride_analytics_checkpoint_csv/state`
+- **Solution**: The Spark checkpoint state is out-of-sync. Clean the temporary files and restart the processor:
+  ```bash
+  make local-processor
+  ```
 
 ### Kafka connection refused
 - Ensure Kafka container is healthy: `docker compose ps`

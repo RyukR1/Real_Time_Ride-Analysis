@@ -31,6 +31,10 @@ if [ ! -f .env ]; then
 fi
 
 echo ""
+echo "🛠️ Building Docker images sequentially to avoid parallel BuildKit conflicts..."
+docker compose build producer
+docker compose build streamlit
+echo ""
 echo "🚀 Starting Docker Compose stack..."
 echo ""
 

@@ -32,12 +32,17 @@ def check_docker():
 def check_docker_compose():
     """Verify Docker Compose is installed"""
     try:
-        subprocess.run(["docker-compose", "--version"], capture_output=True, check=True)
+        subprocess.run(["docker", "compose", "version"], capture_output=True, check=True)
         print("✓ Docker Compose installed")
         return True
     except:
-        print("❌ Docker Compose not found. Install from https://docs.docker.com/compose/install/")
-        return False
+        try:
+            subprocess.run(["docker-compose", "--version"], capture_output=True, check=True)
+            print("✓ Docker Compose installed")
+            return True
+        except:
+            print("❌ Docker Compose not found. Install from https://docs.docker.com/compose/install/")
+            return False
 
 
 def check_required_files():
